@@ -94,3 +94,11 @@ export async function getAgentTrades(agentId: string): Promise<Trade[]> {
   const data = await request<Trade[] | { trades: Trade[] }>(`/trades/agent/${agentId}`)
   return Array.isArray(data) ? data : (data as { trades: Trade[] }).trades ?? []
 }
+
+export async function getSettings(): Promise<{ hasVeniceApiKey: boolean; veniceApiKey: string }> {
+  return request('/settings')
+}
+
+export async function updateSettings(data: { veniceApiKey: string }): Promise<{ message: string; hasVeniceApiKey: boolean }> {
+  return request('/settings', { method: 'PUT', body: JSON.stringify(data) })
+}

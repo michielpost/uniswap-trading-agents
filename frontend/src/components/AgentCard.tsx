@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { Agent } from '@/types'
 import StatusBadge from './StatusBadge'
@@ -10,11 +11,20 @@ interface AgentCardProps {
   onStop: (id: string) => void
   onDelete: (id: string) => void
   onEditSkills: (id: string) => void
+  onShare?: (id: string) => void
 }
 
-export default function AgentCard({ agent, onStart, onStop, onDelete, onEditSkills }: AgentCardProps) {
+export default function AgentCard({ agent, onStart, onStop, onDelete, onEditSkills, onShare }: AgentCardProps) {
   const router = useRouter()
   const pnl = parseFloat(agent.totalPnl || '0')
+  const [showCopied, setShowCopied] = useState(false)
+
+  const handleShare = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    onShare?.(agent.id)
+    setShowCopied(true)
+    setTimeout(() => setShowCopied(false), 2000)
+  }
 
   return (
     <div
@@ -66,6 +76,22 @@ export default function AgentCard({ agent, onStart, onStop, onDelete, onEditSkil
         >
           ✏ Skills
         </button>
+        {onShare && (
+          <div className="relative">
+            <button
+              onClick={handleShare}
+              className="bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white text-sm py-1.5 px-3 rounded-lg transition-colors"
+              title="Copy shareable link"
+            >
+              📤
+            </button>
+            {showCopied && (
+              <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-green-400 text-xs px-2 py-1 rounded whitespace-nowrap border border-gray-700">
+                Link copied!
+              </span>
+            )}
+          </div>
+        )}
         <button
           onClick={() => onDelete(agent.id)}
           className="bg-red-900/60 hover:bg-red-800 text-red-300 hover:text-red-200 text-sm py-1.5 px-3 rounded-lg transition-colors"

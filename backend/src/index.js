@@ -7,10 +7,12 @@ const http = require("http");
 const { WebSocketServer } = require("ws");
 
 // Route imports
-const authRoutes   = require("./routes/auth");
-const agentRoutes  = require("./routes/agents");
-const tradeRoutes  = require("./routes/trades");
-const marketRoutes = require("./routes/market");
+const authRoutes     = require("./routes/auth");
+const agentRoutes    = require("./routes/agents");
+const tradeRoutes    = require("./routes/trades");
+const marketRoutes   = require("./routes/market");
+const settingsRoutes = require("./routes/settings");
+const { getPublicAgent } = require("./controllers/agentController");
 
 // Middleware imports
 const { rateLimiter }  = require("./middleware/rateLimiter");
@@ -60,10 +62,14 @@ app.get("/health", (req, res) => {
 });
 
 // ─── API Routes ───────────────────────────────────────────────────────────────
-app.use("/api/auth",   authRoutes);
-app.use("/api/agents", authenticate, agentRoutes);
-app.use("/api/trades", authenticate, tradeRoutes);
-app.use("/api/market", authenticate, marketRoutes);
+// Public agent view (no auth)
+app.get("/api/agents/:id/public", getPublicAgent);
+
+app.use("/api/auth",     authRoutes);
+app.use("/api/agents",  authenticate, agentRoutes);
+app.use("/api/trades",  authenticate, tradeRoutes);
+app.use("/api/market",  authenticate, marketRoutes);
+app.use("/api/settings", settingsRoutes);
 
 // ─── API docs stub ────────────────────────────────────────────────────────────
 app.get("/api", (req, res) => {

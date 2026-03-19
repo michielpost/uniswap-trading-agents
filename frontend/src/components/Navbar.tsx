@@ -25,6 +25,12 @@ export default function Navbar() {
           ⚡ Uniswap Trading Agents
         </button>
         <div className="flex items-center gap-4">
+          <button
+            onClick={() => router.push('/dashboard/settings')}
+            className="text-gray-400 hover:text-white text-sm transition-colors"
+          >
+            ⚙ Settings
+          </button>
           {address && (
             <span className="text-gray-400 text-sm font-mono bg-gray-700 px-3 py-1 rounded-lg">
               {address.slice(0, 6)}…{address.slice(-4)}

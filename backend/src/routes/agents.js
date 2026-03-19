@@ -18,9 +18,13 @@ const {
   depositFunds,
   withdrawFunds,
   deleteAgent,
+  getPublicAgent,
 } = require("../controllers/agentController");
 
 const router = express.Router();
+
+// GET /api/agents/:id/public — public, no auth (must be before authenticated /:id)
+router.get("/:id/public", param("id").notEmpty(), getPublicAgent);
 
 // GET  /api/agents
 router.get("/", listAgents);

@@ -10,6 +10,7 @@ import {
   stopAgent,
   deleteAgent,
   getPortfolioMetrics,
+  getSettings,
 } from '@/lib/api'
 import type { Agent, PortfolioMetrics } from '@/types'
 import Navbar from '@/components/Navbar'
@@ -35,6 +36,7 @@ export default function DashboardPage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+  const [hasVeniceKey, setHasVeniceKey] = useState<boolean | null>(null)
 
   useEffect(() => {
     if (!isAuthenticated()) {
@@ -53,12 +55,14 @@ export default function DashboardPage() {
   const loadData = useCallback(async () => {
     setLoading(true)
     try {
-      const [agentsData, metricsData] = await Promise.all([
+      const [agentsData, metricsData, settingsData] = await Promise.all([
         listAgents(),
         getPortfolioMetrics().catch(() => null),
+        getSettings().catch(() => null),
       ])
       setAgents(agentsData)
       if (metricsData) setMetrics(metricsData)
+      if (settingsData) setHasVeniceKey(settingsData.hasVeniceApiKey)
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Failed to load data', 'error')
     } finally {
@@ -135,6 +139,19 @@ export default function DashboardPage() {
       <Navbar />
 
       <main className="max-w-7xl mx-auto px-4 py-8">
+        {/* Venice API key warning */}
+        {hasVeniceKey === false && (
+          <div className="mb-6 p-4 bg-yellow-900/40 border border-yellow-600 rounded-xl flex items-center justify-between">
+            <div>
+              <p className="text-yellow-300 font-semibold">⚠️ Venice API key not configured</p>
+              <p className="text-yellow-400 text-sm mt-1">Agents cannot run without a Venice API key. Add yours in Settings.</p>
+            </div>
+            <button onClick={() => router.push('/dashboard/settings')} className="bg-yellow-600 hover:bg-yellow-500 text-white font-semibold py-2 px-4 rounded-lg text-sm">
+              Go to Settings
+            </button>
+          </div>
+        )}
+
         {/* Portfolio Stats */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <StatCard label="Total Agents" value={computedMetrics.totalAgents} />
@@ -190,6 +207,10 @@ export default function DashboardPage() {
                   onStop={handleStop}
                   onDelete={handleDelete}
                   onEditSkills={(id) => router.push(`/dashboard/agents/${id}`)}
+                  onShare={(id) => {
+                    navigator.clipboard.writeText(`${window.location.origin}/agent/${id}`)
+                    showToast('Shareable link copied!', 'success')
+                  }}
                 />
               </div>
             ))}

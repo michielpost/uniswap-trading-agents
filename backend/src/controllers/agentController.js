@@ -14,6 +14,7 @@ const {
   getTradeHistory,
   parseSkillsMarkdown,
 } = require("../services/agentEngine");
+const { getSettingsForAddress } = require("./settingsController");
 
 // ─── In-memory stores (export agentStore for tradeController) ─────────────────
 const agentStore = new Map();   // agentId -> agent object
@@ -118,12 +119,18 @@ async function startAgent(req, res, next) {
       throw new AppError("Agent has no skills configured — upload a skills.md first", 400);
     }
 
+    // Require Venice API key
+    const settings = getSettingsForAddress(req.user.address);
+    if (!settings.veniceApiKey) {
+      throw new AppError("Venice API key required — configure it in Settings before starting agents", 403);
+    }
+
     agent.status    = "running";
     agent.updatedAt = new Date().toISOString();
 
     // Start the execution engine loop
     const broadcast = req.app.locals.broadcast;
-    startAgentEngine(agent, agentStore, broadcast);
+    startAgentEngine(agent, agentStore, broadcast, settings.veniceApiKey);
 
     res.json({ agent, message: "Agent started successfully" });
   } catch (err) { next(err); }
@@ -277,8 +284,39 @@ async function deleteAgent(req, res, next) {
   } catch (err) { next(err); }
 }
 
+// ─── GET /api/agents/:id/public (no auth — shareable) ────────────────────────
+async function getPublicAgent(req, res, next) {
+  try {
+    const agent = agentStore.get(req.params.id);
+    if (!agent) throw new AppError("Agent not found", 404);
+    const metrics = getAgentMetrics(agent.id);
+
+    // Extract skill headings only (don't expose full strategy details)
+    const skillHeadings = (agent.skills || "")
+      .split("\n")
+      .filter((l) => l.startsWith("#"))
+      .map((l) => l.replace(/^#+\s*/, "").trim())
+      .slice(0, 8);
+
+    res.json({
+      id:           agent.id,
+      name:         agent.name,
+      status:       agent.status,
+      totalTrades:  agent.totalTrades || 0,
+      totalPnl:     agent.totalPnl || "0",
+      skillHeadings,
+      createdAt:    agent.createdAt,
+      metrics: {
+        winRate:    metrics?.winRate    ?? 0,
+        totalTrades: metrics?.totalTrades ?? 0,
+        totalPnl:   metrics?.totalPnl   ?? "0",
+      },
+    });
+  } catch (err) { next(err); }
+}
+
 module.exports = {
-  agentStore,          // exported for tradeController
+  agentStore,
   listAgents,
   createAgent,
   getAgent,
@@ -291,4 +329,5 @@ module.exports = {
   depositFunds,
   withdrawFunds,
   deleteAgent,
+  getPublicAgent,
 };

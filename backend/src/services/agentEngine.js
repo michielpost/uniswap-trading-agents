@@ -6,6 +6,31 @@
 const { v4: uuidv4 } = require("uuid");
 const { executeTrade: uniswapExecuteTrade, getQuote } = require("./uniswapService");
 
+// ─── Venice AI helper ─────────────────────────────────────────────────────────
+async function callVeniceAI(veniceApiKey, messages) {
+  const resp = await fetch("https://api.venice.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${veniceApiKey}` },
+    body: JSON.stringify({
+      model: "llama-3.3-70b",
+      messages,
+      max_tokens: 100,
+      temperature: 0.2,
+    }),
+  });
+  if (!resp.ok) throw new Error(`Venice API error: ${resp.status} ${await resp.text()}`);
+  const data = await resp.json();
+  return data.choices?.[0]?.message?.content?.trim() ?? "";
+}
+
+// ─── CoinGecko ETH price ──────────────────────────────────────────────────────
+async function getCurrentEthPrice() {
+  const resp = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd");
+  if (!resp.ok) throw new Error("CoinGecko fetch failed");
+  const data = await resp.json();
+  return data.ethereum.usd;
+}
+
 // ─── Stores ───────────────────────────────────────────────────────────────────
 const tradeHistory = new Map();   // agentId -> Trade[]
 const agentTimers  = new Map();   // agentId -> intervalId
@@ -162,11 +187,10 @@ async function executeTrade(agent, config, direction = "buy", broadcast) {
 }
 
 // ─── Trigger evaluation ───────────────────────────────────────────────────────
-async function evaluateTriggers(agent, config, broadcast) {
+async function evaluateTriggers(agent, config, broadcast, veniceApiKey) {
   const { triggers } = config;
   if (!triggers || Object.keys(triggers).length === 0) return;
 
-  const tickMs = parseInt(process.env.ENGINE_TICK_MS || "5000");
   const maxDaily = config.risk.maxDailyTrades || 5;
 
   const m = getAgentMetrics(agent.id);
@@ -175,41 +199,105 @@ async function evaluateTriggers(agent, config, broadcast) {
     return;
   }
 
-  // Periodic trigger (fire every tick if no price trigger)
+  // ── Get current ETH price ───────────────────────────────────────────────────
+  let price = null;
+  try {
+    price = await getCurrentEthPrice();
+  } catch (cgErr) {
+    // Fallback: try Uniswap quoter if RPC_URL is available
+    if (process.env.RPC_URL) {
+      try {
+        const quote = await getQuote(
+          config.strategy.tokenIn,
+          config.strategy.tokenOut,
+          "1000000000000000000",
+          config.strategy.fee
+        );
+        price = parseFloat(quote.amountOut) / 1e6;
+      } catch (rpcErr) {
+        console.warn(`[AgentEngine] Price fetch failed for agent ${agent.id}:`, rpcErr.message);
+      }
+    } else {
+      console.warn(`[AgentEngine] CoinGecko failed for agent ${agent.id}:`, cgErr.message);
+    }
+  }
+
+  // ── Venice AI decision ──────────────────────────────────────────────────────
+  if (veniceApiKey) {
+    try {
+      const recentTrades = (tradeHistory.get(agent.id) || []).slice(0, 3);
+      const tradesSummary = recentTrades.length
+        ? recentTrades.map((t) => `${t.direction.toUpperCase()} ${t.status} at ${new Date(t.timestamp).toISOString()}`).join("; ")
+        : "No recent trades";
+
+      const messages = [
+        {
+          role: "system",
+          content: "You are a trading decision engine. Analyse the provided context and reply with exactly one word: BUY, SELL, or HOLD.",
+        },
+        {
+          role: "user",
+          content: `Current ETH price: $${price ?? "unknown"}\n\nAgent skills:\n${agent.skills || "(no skills configured)"}\n\nRecent trades (last 3): ${tradesSummary}\n\nBased on this, should the agent BUY, SELL, or HOLD right now? Reply with exactly one word.`,
+        },
+      ];
+
+      const rawDecision = await callVeniceAI(veniceApiKey, messages);
+      const decision = rawDecision.toUpperCase().replace(/[^A-Z]/g, "");
+
+      console.log(`[AgentEngine] Venice decision for agent ${agent.id}: ${decision} (ETH: $${price ?? "unknown"})`);
+
+      if (decision === "BUY") {
+        await executeTrade(agent, config, "buy", broadcast);
+      } else if (decision === "SELL") {
+        await executeTrade(agent, config, "sell", broadcast);
+      }
+      // HOLD → do nothing
+      return;
+    } catch (veniceErr) {
+      console.warn(`[AgentEngine] Venice AI failed for agent ${agent.id}:`, veniceErr.message);
+      // Fall through to hard-coded logic
+    }
+  }
+
+  // ── Fallback: hard-coded trigger logic ─────────────────────────────────────
+  // Periodic trigger (fire every tick)
   if (triggers.interval_minutes) {
-    // Handled by the tick interval itself
     await executeTrade(agent, config, "buy", broadcast);
     return;
   }
 
-  // Price triggers via Uniswap quoter
-  if ((triggers.price_above || triggers.price_below) && process.env.RPC_URL) {
+  // Price triggers
+  if (price !== null && (triggers.price_above || triggers.price_below)) {
+    if (triggers.price_above && price > triggers.price_above) {
+      console.log(`[AgentEngine] Agent ${agent.id}: price ${price} > ${triggers.price_above} — selling`);
+      await executeTrade(agent, config, "sell", broadcast);
+    } else if (triggers.price_below && price < triggers.price_below) {
+      console.log(`[AgentEngine] Agent ${agent.id}: price ${price} < ${triggers.price_below} — buying`);
+      await executeTrade(agent, config, "buy", broadcast);
+    }
+  } else if ((triggers.price_above || triggers.price_below) && process.env.RPC_URL && price === null) {
+    // Legacy: try RPC quoter as last resort
     try {
       const quote = await getQuote(
         config.strategy.tokenIn,
         config.strategy.tokenOut,
-        // 1 WETH in wei
         "1000000000000000000",
         config.strategy.fee
       );
-      // amountOut in USDC (6 decimals) → price in USD
-      const price = parseFloat(quote.amountOut) / 1e6;
-
-      if (triggers.price_above && price > triggers.price_above) {
-        console.log(`[AgentEngine] Agent ${agent.id}: price ${price} > ${triggers.price_above} — selling`);
+      const rpcPrice = parseFloat(quote.amountOut) / 1e6;
+      if (triggers.price_above && rpcPrice > triggers.price_above) {
         await executeTrade(agent, config, "sell", broadcast);
-      } else if (triggers.price_below && price < triggers.price_below) {
-        console.log(`[AgentEngine] Agent ${agent.id}: price ${price} < ${triggers.price_below} — buying`);
+      } else if (triggers.price_below && rpcPrice < triggers.price_below) {
         await executeTrade(agent, config, "buy", broadcast);
       }
     } catch (err) {
-      console.warn(`[AgentEngine] Price fetch failed for agent ${agent.id}:`, err.message);
+      console.warn(`[AgentEngine] RPC price fetch failed for agent ${agent.id}:`, err.message);
     }
   }
 }
 
 // ─── Agent lifecycle ──────────────────────────────────────────────────────────
-function startAgentEngine(agent, agentStore, broadcast) {
+function startAgentEngine(agent, agentStore, broadcast, veniceApiKey) {
   if (agentTimers.has(agent.id)) return; // Already running
 
   let config;
@@ -229,7 +317,7 @@ function startAgentEngine(agent, agentStore, broadcast) {
       stopAgentEngine(agent.id, agent.owner, broadcast);
       return;
     }
-    await evaluateTriggers(currentAgent, config, broadcast);
+    await evaluateTriggers(currentAgent, config, broadcast, veniceApiKey);
   }, tickMs);
 
   agentTimers.set(agent.id, timer);
