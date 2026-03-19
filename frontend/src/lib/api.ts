@@ -36,7 +36,8 @@ export async function login(
 }
 
 export async function listAgents(): Promise<Agent[]> {
-  return request('/agents')
+  const data = await request<Agent[] | { agents: Agent[] }>('/agents')
+  return Array.isArray(data) ? data : (data as { agents: Agent[] }).agents ?? []
 }
 
 export async function createAgent(name: string, skills?: string): Promise<Agent> {
@@ -81,7 +82,8 @@ export async function deleteAgent(id: string): Promise<void> {
 }
 
 export async function getAllTrades(): Promise<Trade[]> {
-  return request('/trades')
+  const data = await request<Trade[] | { trades: Trade[] }>('/trades')
+  return Array.isArray(data) ? data : (data as { trades: Trade[] }).trades ?? []
 }
 
 export async function getPortfolioMetrics(): Promise<PortfolioMetrics> {
@@ -89,5 +91,6 @@ export async function getPortfolioMetrics(): Promise<PortfolioMetrics> {
 }
 
 export async function getAgentTrades(agentId: string): Promise<Trade[]> {
-  return request(`/trades/agent/${agentId}`)
+  const data = await request<Trade[] | { trades: Trade[] }>(`/trades/agent/${agentId}`)
+  return Array.isArray(data) ? data : (data as { trades: Trade[] }).trades ?? []
 }
