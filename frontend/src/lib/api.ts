@@ -41,28 +41,32 @@ export async function listAgents(): Promise<Agent[]> {
 }
 
 export async function createAgent(name: string, skills?: string): Promise<Agent> {
-  return request('/agents', {
+  const data = await request<Agent | { agent: Agent }>('/agents', {
     method: 'POST',
     body: JSON.stringify({ name, skills }),
   })
+  return 'agent' in data ? (data as { agent: Agent }).agent : data as Agent
 }
 
 export async function getAgent(id: string): Promise<Agent> {
-  return request(`/agents/${id}`)
+  const data = await request<Agent | { agent: Agent }>(`/agents/${id}`)
+  return 'agent' in data ? (data as { agent: Agent }).agent : data as Agent
 }
 
 export async function updateAgent(id: string, data: Partial<Agent>): Promise<Agent> {
-  return request(`/agents/${id}`, {
+  const res = await request<Agent | { agent: Agent }>(`/agents/${id}`, {
     method: 'PUT',
     body: JSON.stringify(data),
   })
+  return 'agent' in res ? (res as { agent: Agent }).agent : res as Agent
 }
 
 export async function updateAgentSkills(id: string, skills: string): Promise<Agent> {
-  return request(`/agents/${id}/skills`, {
+  const data = await request<Agent | { agent: Agent }>(`/agents/${id}/skills`, {
     method: 'PUT',
     body: JSON.stringify({ skills }),
   })
+  return 'agent' in data ? (data as { agent: Agent }).agent : data as Agent
 }
 
 export async function startAgent(id: string): Promise<void> {

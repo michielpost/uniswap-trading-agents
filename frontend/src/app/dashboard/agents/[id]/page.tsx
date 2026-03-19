@@ -300,7 +300,9 @@ export default function AgentDetailPage() {
                 )}
                 <div className="flex gap-1.5">
                   <span className="text-gray-400">Created:</span>
-                  <span className="text-gray-300">{new Date(agent.createdAt).toLocaleDateString()}</span>
+                  <span className="text-gray-300">
+                    {agent.createdAt ? new Date(agent.createdAt).toLocaleDateString() : '—'}
+                  </span>
                 </div>
               </div>
             </div>
