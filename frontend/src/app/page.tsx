@@ -2,8 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { useAccount, useSignMessage } from 'wagmi'
-import { useWeb3Modal } from '@web3modal/wagmi/react'
+import { useAccount, useConnect, useSignMessage } from 'wagmi'
 import { SiweMessage } from 'siwe'
 import { getNonce, login } from '@/lib/api'
 import { saveAuth, isAuthenticated } from '@/lib/auth'
@@ -11,7 +10,7 @@ import { saveAuth, isAuthenticated } from '@/lib/auth'
 export default function Home() {
   const router = useRouter()
   const { address, isConnected, chainId } = useAccount()
-  const { open } = useWeb3Modal()
+  const { connect, connectors } = useConnect()
   const { signMessageAsync } = useSignMessage()
 
   const [loading, setLoading] = useState(false)
@@ -25,12 +24,10 @@ export default function Home() {
     }
   }, [router])
 
-  const handleConnectAndSign = async () => {
-    if (!isConnected || !address) {
-      open()
-      return
-    }
-    await signIn(address, chainId ?? 1)
+  const handleConnect = () => {
+    // Prefer injected (MetaMask), fall back to WalletConnect
+    const injected = connectors.find(c => c.id === 'injected') ?? connectors[0]
+    if (injected) connect({ connector: injected })
   }
 
   const signIn = async (addr: string, chain: number) => {
@@ -38,7 +35,6 @@ export default function Home() {
     setError(null)
     try {
       const { nonce } = await getNonce(addr)
-
       const message = new SiweMessage({
         domain: window.location.host,
         address: addr,
@@ -48,7 +44,6 @@ export default function Home() {
         chainId: chain,
         nonce,
       }).prepareMessage()
-
       const signature = await signMessageAsync({ message })
       const { token, address: loggedAddress } = await login(message, signature)
       saveAuth(token, loggedAddress)
@@ -78,7 +73,6 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-gray-900 flex flex-col items-center justify-center px-4">
-      {/* Background glow */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-blue-900/20 rounded-full blur-3xl" />
       </div>
@@ -111,15 +105,12 @@ export default function Home() {
             </button>
           ) : (
             <button
-              onClick={handleConnectAndSign}
+              onClick={isConnected ? () => signIn(address!, chainId ?? 1) : handleConnect}
               disabled={loading}
               className="bg-blue-600 hover:bg-blue-500 disabled:bg-blue-800 disabled:cursor-not-allowed text-white font-semibold py-3 px-8 rounded-xl transition-colors shadow-lg flex items-center gap-2 justify-center"
             >
               {loading ? (
-                <>
-                  <span className="animate-spin">⟳</span>
-                  Signing in…
-                </>
+                <><span className="animate-spin inline-block">⟳</span> Signing in…</>
               ) : isConnected ? (
                 'Sign In with Ethereum'
               ) : (
@@ -138,3 +129,4 @@ export default function Home() {
     </main>
   )
 }
+
