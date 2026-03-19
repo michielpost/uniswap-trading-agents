@@ -10,7 +10,7 @@ import { saveAuth, isAuthenticated } from '@/lib/auth'
 export default function Home() {
   const router = useRouter()
   const { address, isConnected, chainId } = useAccount()
-  const { connect, connectors } = useConnect()
+  const { connect, connectors, error: connectError, isPending: isConnecting } = useConnect()
   const { signMessageAsync } = useSignMessage()
 
   const [loading, setLoading] = useState(false)
@@ -25,10 +25,18 @@ export default function Home() {
   }, [router])
 
   const handleConnect = () => {
-    // Prefer injected (MetaMask), fall back to WalletConnect
     const injected = connectors.find(c => c.id === 'injected') ?? connectors[0]
-    if (injected) connect({ connector: injected })
+    if (!injected) {
+      setError('No wallet detected. Please install MetaMask and reload the page.')
+      return
+    }
+    connect({ connector: injected })
   }
+
+  // Surface wagmi connection errors
+  useEffect(() => {
+    if (connectError) setError(connectError.message)
+  }, [connectError])
 
   const signIn = async (addr: string, chain: number) => {
     setLoading(true)
@@ -104,19 +112,31 @@ export default function Home() {
               Go to Dashboard →
             </button>
           ) : (
-            <button
-              onClick={isConnected ? () => signIn(address!, chainId ?? 1) : handleConnect}
-              disabled={loading}
-              className="bg-blue-600 hover:bg-blue-500 disabled:bg-blue-800 disabled:cursor-not-allowed text-white font-semibold py-3 px-8 rounded-xl transition-colors shadow-lg flex items-center gap-2 justify-center"
-            >
-              {loading ? (
-                <><span className="animate-spin inline-block">⟳</span> Signing in…</>
-              ) : isConnected ? (
-                'Sign In with Ethereum'
-              ) : (
-                'Connect Wallet'
+            <>
+              <button
+                onClick={isConnected ? () => signIn(address!, chainId ?? 1) : handleConnect}
+                disabled={loading || isConnecting}
+                className="bg-blue-600 hover:bg-blue-500 disabled:bg-blue-800 disabled:cursor-not-allowed text-white font-semibold py-3 px-8 rounded-xl transition-colors shadow-lg flex items-center gap-2 justify-center"
+              >
+                {loading ? (
+                  <><span className="animate-spin inline-block">⟳</span> Signing in…</>
+                ) : isConnecting ? (
+                  <><span className="animate-spin inline-block">⟳</span> Connecting…</>
+                ) : isConnected ? (
+                  'Sign In with Ethereum'
+                ) : (
+                  'Connect Wallet'
+                )}
+              </button>
+              {!isConnected && typeof window !== 'undefined' && !(window as typeof window & { ethereum?: unknown }).ethereum && (
+                <p className="mt-3 text-gray-500 text-xs text-center w-full">
+                  No wallet detected.{' '}
+                  <a href="https://metamask.io/download/" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">
+                    Install MetaMask
+                  </a>
+                </p>
               )}
-            </button>
+            </>
           )}
         </div>
 
