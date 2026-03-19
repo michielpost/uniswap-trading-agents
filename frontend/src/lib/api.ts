@@ -102,3 +102,15 @@ export async function getSettings(): Promise<{ hasVeniceApiKey: boolean; veniceA
 export async function updateSettings(data: { veniceApiKey: string }): Promise<{ message: string; hasVeniceApiKey: boolean }> {
   return request('/settings', { method: 'PUT', body: JSON.stringify(data) })
 }
+
+export interface WalletBalances {
+  address: string
+  eth: string
+  weth: string
+  usdc: string
+  network: string
+}
+
+export async function getWalletBalances(): Promise<WalletBalances> {
+  return request('/wallet')
+}

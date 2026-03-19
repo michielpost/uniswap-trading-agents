@@ -64,14 +64,15 @@ function parseSkillsMarkdown(markdown) {
 
   const config = {
     strategy: {
-      tokenIn:  process.env.WETH_ADDRESS  || "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
-      tokenOut: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", // USDC mainnet
+      // Base Sepolia defaults — override via skills.md
+      tokenIn:  process.env.WETH_ADDRESS  || "0x4200000000000000000000000000000000000006",
+      tokenOut: process.env.USDC_ADDRESS  || "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
       fee:      3000,
     },
     triggers: {},
     risk: {
-      maxTradeSizeEth: 0.05,
-      slippageBps:     50,
+      maxTradeSizeEth: 0.001,  // small for testnet
+      slippageBps:     100,    // 1% slippage on testnet
       stopLossPct:     10,
       maxDailyTrades:  5,
     },

@@ -65,6 +65,18 @@ app.get("/health", (req, res) => {
 // Public agent view (no auth)
 app.get("/api/agents/:id/public", getPublicAgent);
 
+// Executor wallet balances (authenticated)
+app.get("/api/wallet", authenticate, async (req, res, next) => {
+  try {
+    const { getExecutorBalances } = require("./services/uniswapService");
+    const balances = await getExecutorBalances();
+    if (!balances) return res.status(503).json({ error: "Trading wallet not configured" });
+    res.json(balances);
+  } catch (err) {
+    next(err);
+  }
+});
+
 app.use("/api/auth",     authRoutes);
 app.use("/api/agents",  authenticate, agentRoutes);
 app.use("/api/trades",  authenticate, tradeRoutes);
