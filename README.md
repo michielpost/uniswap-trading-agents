@@ -2,7 +2,15 @@
 
 AI-powered trading bot dashboard with skill-based agents, MetaMask authentication, and Uniswap V3 integration.
 
-🏗️ **Built for The Synthesis Hackathon**
+🏗️ **Built for The Synthesis Hackathon** | 🚀 **[Live Demo](https://frontend-mailpost-1109s-projects.vercel.app)**
+
+## Live Deployment
+
+| Service | URL |
+|---------|-----|
+| **Frontend** | https://frontend-mailpost-1109s-projects.vercel.app |
+| **Backend API** | https://backend-production-65de.up.railway.app |
+| **Health Check** | https://backend-production-65de.up.railway.app/health |
 
 ## Features
 
