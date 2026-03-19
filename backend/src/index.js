@@ -24,7 +24,23 @@ const PORT   = process.env.PORT || 4000;
 // ─── Global Middleware ────────────────────────────────────────────────────────
 app.use(helmet());
 app.use(cors({
-  origin:      process.env.FRONTEND_URL || "http://localhost:3000",
+  origin: (origin, callback) => {
+    // Allow requests with no origin (curl, server-to-server)
+    if (!origin) return callback(null, true);
+    const allowed = [
+      process.env.FRONTEND_URL,
+      'http://localhost:3000',
+      'http://localhost:3001',
+    ].filter(Boolean);
+    // Allow any preview/production URL on this Vercel project
+    const isVercelPreview = /https:\/\/frontend-[a-z0-9-]+-mailpost-1109s-projects\.vercel\.app$/.test(origin)
+      || /https:\/\/frontend-beta-self-40\.vercel\.app$/.test(origin);
+    if (allowed.includes(origin) || isVercelPreview) {
+      callback(null, true);
+    } else {
+      callback(new Error(`CORS: origin ${origin} not allowed`));
+    }
+  },
   credentials: true,
 }));
 app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
