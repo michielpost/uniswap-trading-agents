@@ -1,5 +1,6 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useDisconnect } from 'wagmi'
 import { getAddress, clearAuth } from '@/lib/auth'
@@ -7,7 +8,12 @@ import { getAddress, clearAuth } from '@/lib/auth'
 export default function Navbar() {
   const router = useRouter()
   const { disconnect } = useDisconnect()
-  const address = getAddress()
+  const [address, setAddress] = useState<string | null>(null)
+
+  // Read localStorage only on client to avoid SSR hydration mismatch
+  useEffect(() => {
+    setAddress(getAddress())
+  }, [])
 
   const handleLogout = () => {
     clearAuth()

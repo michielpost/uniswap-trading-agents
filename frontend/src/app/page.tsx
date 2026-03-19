@@ -117,7 +117,7 @@ export default function Home() {
         )}
 
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
-          {isAuthenticated() ? (
+          {alreadyAuthed ? (
             <button
               onClick={() => router.push('/dashboard')}
               className="bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 px-8 rounded-xl transition-colors shadow-lg"
