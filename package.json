@@ -1,0 +1,27 @@
+{
+  "name": "uniswap-trading-agents",
+  "version": "1.0.0",
+  "description": "Uniswap Trading Bot Dashboard with AI Agents",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "frontend",
+    "contracts"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev --workspace=backend\" \"npm run dev --workspace=frontend\"",
+    "build": "npm run build --workspace=frontend",
+    "compile": "npm run compile --workspace=contracts",
+    "test": "npm run test --workspace=contracts",
+    "deploy:contracts": "npm run deploy --workspace=contracts",
+    "lint": "eslint . --ext .js,.ts,.tsx"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "eslint": "^8.57.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  }
+}
