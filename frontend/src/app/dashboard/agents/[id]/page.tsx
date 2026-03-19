@@ -3,8 +3,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { isAuthenticated } from '@/lib/auth'
-import { getAgent, updateAgentSkills, startAgent, stopAgent, getAgentTrades } from '@/lib/api'
+import { getAgent, updateAgentSkills, startAgent, stopAgent, getAgentTrades, getAgentLogs } from '@/lib/api'
 import type { Agent, Trade } from '@/types'
+import type { ActivityLogEntry } from '@/lib/api'
 import Navbar from '@/components/Navbar'
 import StatusBadge from '@/components/StatusBadge'
 import Toast from '@/components/Toast'
@@ -23,15 +24,97 @@ Trade WETH/USDC on Uniswap V3
 - stopLossPct: 10
 - maxDailyTrades: 5`
 
-const CHAIN_ID = parseInt(process.env.NEXT_PUBLIC_CHAIN_ID || '1')
+const CHAIN_ID = parseInt(process.env.NEXT_PUBLIC_CHAIN_ID || '84532')
 const ETHERSCAN_BASE =
-  CHAIN_ID === 11155111 ? 'https://sepolia.etherscan.io' : 'https://etherscan.io'
+  CHAIN_ID === 84532
+    ? 'https://sepolia.basescan.org'
+    : CHAIN_ID === 11155111
+    ? 'https://sepolia.etherscan.io'
+    : 'https://etherscan.io'
 
 function MetricRow({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="flex justify-between items-center py-2 border-b border-gray-700/50 last:border-0">
       <span className="text-gray-400 text-sm">{label}</span>
       <span className="text-white font-medium">{value}</span>
+    </div>
+  )
+}
+
+function relativeTime(ts: number): string {
+  const diff = Date.now() - ts
+  if (diff < 60_000) return `${Math.floor(diff / 1000)}s ago`
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`
+  return new Date(ts).toLocaleDateString()
+}
+
+const LOG_TYPE_CONFIG: Record<string, { icon: string; className: string }> = {
+  price:         { icon: '💰', className: 'text-blue-400' },
+  venice_req:    { icon: '🧠', className: 'text-purple-400' },
+  venice_res:    { icon: '💬', className: 'text-purple-300' },
+  trade_start:   { icon: '⚡', className: 'text-yellow-400' },
+  trade_success: { icon: '✅', className: 'text-green-400' },
+  trade_error:   { icon: '❌', className: 'text-red-400' },
+  error:         { icon: '❌', className: 'text-red-400' },
+  info:          { icon: 'ℹ️', className: 'text-gray-400' },
+}
+
+function logTypeConfig(type: string, summary?: string) {
+  if (type === 'venice_res' && summary) {
+    const upper = summary.toUpperCase()
+    if (upper.includes('BUY')) return { icon: '💬', className: 'text-green-400' }
+    if (upper.includes('SELL')) return { icon: '💬', className: 'text-red-400' }
+    if (upper.includes('HOLD')) return { icon: '💬', className: 'text-gray-400' }
+  }
+  return LOG_TYPE_CONFIG[type] ?? { icon: 'ℹ️', className: 'text-gray-400' }
+}
+
+function ActivityLogRow({ entry, etherscanBase }: { entry: ActivityLogEntry; etherscanBase: string }) {
+  const [expanded, setExpanded] = useState(false)
+  const cfg = logTypeConfig(entry.type, entry.summary)
+  const details = entry.details ? (() => { try { return JSON.parse(entry.details!) } catch { return entry.details } })() : null
+
+  const txHash = details && typeof details === 'object' && 'txHash' in details ? (details as Record<string, unknown>).txHash as string | null : null
+
+  return (
+    <div
+      className="border-b border-gray-700/40 py-2 px-1 cursor-pointer hover:bg-gray-700/20 transition-colors"
+      onClick={() => setExpanded(e => !e)}
+    >
+      <div className="flex items-start gap-2 text-sm">
+        <span className="shrink-0 w-20 text-gray-500 text-xs pt-0.5">{relativeTime(entry.ts)}</span>
+        <span className="shrink-0">{cfg.icon}</span>
+        <span className={`shrink-0 text-xs px-1.5 py-0.5 rounded font-mono bg-gray-700 ${cfg.className}`}>
+          {entry.type}
+        </span>
+        <span className={`${cfg.className} flex-1 leading-snug`}>
+          {txHash ? (
+            <>
+              {entry.summary.replace(txHash, '').trim()}{' '}
+              <a
+                href={`${etherscanBase}/tx/${txHash}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-400 hover:text-blue-300 font-mono underline"
+                onClick={e => e.stopPropagation()}
+              >
+                {txHash.slice(0, 8)}…{txHash.slice(-6)}
+              </a>
+            </>
+          ) : (
+            entry.summary
+          )}
+        </span>
+        {details && (
+          <span className="shrink-0 text-gray-600 text-xs">{expanded ? '▲' : '▼'}</span>
+        )}
+      </div>
+      {expanded && details && (
+        <pre className="mt-1.5 ml-[92px] text-xs text-gray-400 bg-gray-900 rounded p-2 overflow-x-auto whitespace-pre-wrap break-all">
+          {JSON.stringify(details, null, 2)}
+        </pre>
+      )}
     </div>
   )
 }
@@ -43,6 +126,7 @@ export default function AgentDetailPage() {
 
   const [agent, setAgent] = useState<Agent | null>(null)
   const [trades, setTrades] = useState<Trade[]>([])
+  const [logs, setLogs] = useState<ActivityLogEntry[]>([])
   const [skills, setSkills] = useState('')
   const [skillsDirty, setSkillsDirty] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -59,6 +143,15 @@ export default function AgentDetailPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
+  // Poll logs when agent is running
+  useEffect(() => {
+    if (agent?.status !== 'running') return
+    const interval = setInterval(() => {
+      getAgentLogs(id).then(setLogs).catch(() => {})
+    }, 4000)
+    return () => clearInterval(interval)
+  }, [agent?.status, id])
+
   const showToast = (message: string, type: 'success' | 'error') => {
     setToast({ message, type })
     setTimeout(() => setToast(null), 3500)
@@ -67,14 +160,16 @@ export default function AgentDetailPage() {
   const loadData = useCallback(async () => {
     setLoading(true)
     try {
-      const [agentData, tradesData] = await Promise.all([
+      const [agentData, tradesData, logsData] = await Promise.all([
         getAgent(id),
         getAgentTrades(id).catch(() => [] as Trade[]),
+        getAgentLogs(id).catch(() => [] as ActivityLogEntry[]),
       ])
       setAgent(agentData)
       setSkills(agentData.skills || SKILLS_TEMPLATE)
       setSkillsDirty(false)
       setTrades(tradesData)
+      setLogs(logsData)
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Failed to load agent', 'error')
     } finally {
@@ -85,9 +180,8 @@ export default function AgentDetailPage() {
   useWebSocket((data: unknown) => {
     const event = data as { type?: string; agentId?: string }
     if (event?.type === 'trade' && event?.agentId === id) {
-      getAgentTrades(id)
-        .then(setTrades)
-        .catch(() => {})
+      getAgentTrades(id).then(setTrades).catch(() => {})
+      getAgentLogs(id).then(setLogs).catch(() => {})
     }
   })
 
@@ -285,6 +379,35 @@ export default function AgentDetailPage() {
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Activity Log */}
+        <div className="mt-6 bg-gray-800 rounded-2xl p-6 border border-gray-700">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-white font-semibold text-lg">Activity Log</h2>
+            <div className="flex items-center gap-2">
+              {agent.status === 'running' && (
+                <span className="flex items-center gap-1 text-xs text-green-400">
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                  Live
+                </span>
+              )}
+              <span className="text-xs text-gray-500">{logs.length} entries</span>
+            </div>
+          </div>
+          {logs.length === 0 ? (
+            <div className="text-center py-10">
+              <div className="text-3xl mb-2">🪵</div>
+              <p className="text-gray-400 text-sm">No activity yet</p>
+              <p className="text-gray-500 text-xs mt-1">Logs will appear when the agent runs</p>
+            </div>
+          ) : (
+            <div className="max-h-96 overflow-y-auto rounded-xl bg-gray-900/50">
+              {logs.map((entry) => (
+                <ActivityLogRow key={entry.id} entry={entry} etherscanBase={ETHERSCAN_BASE} />
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Trade History */}

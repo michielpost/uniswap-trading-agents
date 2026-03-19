@@ -19,6 +19,7 @@ const {
   withdrawFunds,
   deleteAgent,
   getPublicAgent,
+  getAgentLogs,
 } = require("../controllers/agentController");
 
 const router = express.Router();
@@ -75,6 +76,9 @@ router.get(
 
 // GET  /api/agents/:id/metrics
 router.get("/:id/metrics", param("id").notEmpty(), getAgentStats);
+
+// GET  /api/agents/:id/logs
+router.get("/:id/logs", param("id").notEmpty(), getAgentLogs);
 
 // POST /api/agents/:id/deposit
 router.post(

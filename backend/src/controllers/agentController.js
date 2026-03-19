@@ -16,8 +16,87 @@ const {
 } = require("../services/agentEngine");
 const { getSettingsForAddress } = require("./settingsController");
 
-// ─── In-memory stores (export agentStore for tradeController) ─────────────────
-const agentStore = new Map();   // agentId -> agent object
+const db = require('../db');
+
+// ─── agentStore backed by SQLite ──────────────────────────────────────────────
+// Provides Map-like interface to existing code while persisting to SQLite.
+const agentStore = {
+  _cache: new Map(),
+
+  _fromRow(row) {
+    if (!row) return undefined;
+    return {
+      id: row.id,
+      name: row.name,
+      owner: row.owner,
+      skills: row.skills || '',
+      status: row.status,
+      contractAddress: row.contract_address || null,
+      vaultAddress: row.vault_address || null,
+      totalTrades: row.total_trades || 0,
+      totalPnl: row.total_pnl || '0',
+      lastPrice: row.last_price || null,
+      txHash: row.tx_hash || null,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  },
+
+  get(id) {
+    if (this._cache.has(id)) return this._cache.get(id);
+    const row = db.prepare('SELECT * FROM agents WHERE id = ?').get(id);
+    const agent = this._fromRow(row);
+    if (agent) this._cache.set(id, agent);
+    return agent;
+  },
+
+  set(id, agent) {
+    this._cache.set(id, agent);
+    db.prepare(`
+      INSERT INTO agents (id, name, owner, skills, status, contract_address, vault_address,
+        total_trades, total_pnl, last_price, tx_hash, created_at, updated_at)
+      VALUES (@id, @name, @owner, @skills, @status, @contractAddress, @vaultAddress,
+        @totalTrades, @totalPnl, @lastPrice, @txHash, @createdAt, @updatedAt)
+      ON CONFLICT(id) DO UPDATE SET
+        name=excluded.name, owner=excluded.owner, skills=excluded.skills, status=excluded.status,
+        contract_address=excluded.contract_address, vault_address=excluded.vault_address,
+        total_trades=excluded.total_trades, total_pnl=excluded.total_pnl,
+        last_price=excluded.last_price, tx_hash=excluded.tx_hash, updated_at=excluded.updated_at
+    `).run({
+      id: agent.id,
+      name: agent.name,
+      owner: agent.owner,
+      skills: agent.skills || '',
+      status: agent.status,
+      contractAddress: agent.contractAddress || null,
+      vaultAddress: agent.vaultAddress || null,
+      totalTrades: agent.totalTrades || 0,
+      totalPnl: agent.totalPnl || '0',
+      lastPrice: agent.lastPrice || null,
+      txHash: agent.txHash || null,
+      createdAt: agent.createdAt,
+      updatedAt: agent.updatedAt,
+    });
+  },
+
+  has(id) {
+    return !!this.get(id);
+  },
+
+  delete(id) {
+    this._cache.delete(id);
+    db.prepare('DELETE FROM agents WHERE id = ?').run(id);
+  },
+
+  values() {
+    const rows = db.prepare('SELECT * FROM agents').all();
+    return rows.map(r => {
+      const agent = this._fromRow(r);
+      this._cache.set(agent.id, agent);
+      return agent;
+    });
+  },
+};
 
 function ownsAgent(agent, userAddress) {
   return agent.owner.toLowerCase() === userAddress.toLowerCase();
@@ -284,6 +363,19 @@ async function deleteAgent(req, res, next) {
   } catch (err) { next(err); }
 }
 
+// ─── GET /api/agents/:id/logs ────────────────────────────────────────────────
+async function getAgentLogs(req, res, next) {
+  try {
+    const agent = agentStore.get(req.params.id);
+    if (!agent) throw new AppError('Agent not found', 404);
+    if (!ownsAgent(agent, req.user.address)) throw new AppError('Forbidden', 403);
+    const { getActivityLogs } = require('../services/agentEngine');
+    const limit = parseInt(req.query.limit || '100');
+    const logs = getActivityLogs(agent.id, limit);
+    res.json({ logs });
+  } catch (err) { next(err); }
+}
+
 // ─── GET /api/agents/:id/public (no auth — shareable) ────────────────────────
 async function getPublicAgent(req, res, next) {
   try {
@@ -330,4 +422,5 @@ module.exports = {
   withdrawFunds,
   deleteAgent,
   getPublicAgent,
+  getAgentLogs,
 };

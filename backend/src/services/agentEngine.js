@@ -5,6 +5,28 @@
 
 const { v4: uuidv4 } = require("uuid");
 const { executeTrade: uniswapExecuteTrade, getQuote } = require("./uniswapService");
+const db = require('../db');
+
+// ─── Activity log ──────────────────────────────────────────────────────────────
+function logActivity(agentId, type, summary, details = null) {
+  try {
+    db.prepare(
+      'INSERT INTO activity_logs (agent_id, ts, type, summary, details) VALUES (?, ?, ?, ?, ?)'
+    ).run(agentId, Date.now(), type, summary, details ? JSON.stringify(details) : null);
+  } catch (err) {
+    console.warn('[ActivityLog] Failed to write log:', err.message);
+  }
+}
+
+function getActivityLogs(agentId, limit = 100) {
+  try {
+    return db.prepare(
+      'SELECT * FROM activity_logs WHERE agent_id = ? ORDER BY ts DESC LIMIT ?'
+    ).all(agentId, limit);
+  } catch {
+    return [];
+  }
+}
 
 // ─── Venice AI helper ─────────────────────────────────────────────────────────
 async function callVeniceAI(veniceApiKey, messages) {
@@ -167,14 +189,30 @@ async function executeTrade(agent, config, direction = "buy", broadcast) {
   };
 
   try {
+    logActivity(agent.id, 'trade_start', `${direction.toUpperCase()} trade starting: ${trade.amountIn} ETH`, {
+      direction,
+      tokenIn: trade.tokenIn,
+      tokenOut: trade.tokenOut,
+      amountIn: trade.amountIn,
+      fee: trade.fee,
+    });
     const result = await uniswapExecuteTrade(trade, config.risk);
     trade.txHash   = result.txHash;
     trade.amountOut = result.amountOut;
     trade.status    = "success";
+    logActivity(agent.id, 'trade_success', `Trade successful: ${result.txHash || 'simulated'}`, {
+      txHash: result.txHash,
+      amountOut: result.amountOut,
+      direction,
+    });
   } catch (err) {
     console.warn(`[AgentEngine] Trade failed for agent ${agent.id}:`, err.message);
     trade.status = "failed";
     trade.error  = err.message;
+    logActivity(agent.id, 'trade_error', `Trade failed: ${err.message}`, {
+      error: err.message,
+      direction,
+    });
   }
 
   recordTrade(agent.id, trade);
@@ -204,6 +242,7 @@ async function evaluateTriggers(agent, config, broadcast, veniceApiKey) {
   let price = null;
   try {
     price = await getCurrentEthPrice();
+    logActivity(agent.id, 'price', `ETH price: $${price.toFixed(2)}`, { price });
   } catch (cgErr) {
     // Fallback: try Uniswap quoter if RPC_URL is available
     if (process.env.RPC_URL) {
@@ -215,6 +254,7 @@ async function evaluateTriggers(agent, config, broadcast, veniceApiKey) {
           config.strategy.fee
         );
         price = parseFloat(quote.amountOut) / 1e6;
+        logActivity(agent.id, 'price', `ETH price (RPC fallback): $${price.toFixed(2)}`, { price });
       } catch (rpcErr) {
         console.warn(`[AgentEngine] Price fetch failed for agent ${agent.id}:`, rpcErr.message);
       }
@@ -242,8 +282,18 @@ async function evaluateTriggers(agent, config, broadcast, veniceApiKey) {
         },
       ];
 
+      logActivity(agent.id, 'venice_req', `Venice AI request (ETH: $${price ?? 'unknown'})`, {
+        model: 'llama-3.3-70b',
+        prompt: messages[1].content,
+      });
       const rawDecision = await callVeniceAI(veniceApiKey, messages);
       const decision = rawDecision.toUpperCase().replace(/[^A-Z]/g, "");
+
+      logActivity(agent.id, 'venice_res', `Venice AI decision: ${decision}`, {
+        raw: rawDecision,
+        decision,
+        price,
+      });
 
       console.log(`[AgentEngine] Venice decision for agent ${agent.id}: ${decision} (ETH: $${price ?? "unknown"})`);
 
@@ -351,5 +401,6 @@ module.exports = {
   executeTrade,
   getTradeHistory,
   getAgentMetrics,
+  getActivityLogs,
   tradeHistory,
 };

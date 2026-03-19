@@ -114,3 +114,17 @@ export interface WalletBalances {
 export async function getWalletBalances(): Promise<WalletBalances> {
   return request('/wallet')
 }
+
+export interface ActivityLogEntry {
+  id: number
+  agent_id: string
+  ts: number
+  type: string
+  summary: string
+  details: string | null
+}
+
+export async function getAgentLogs(id: string, limit = 100): Promise<ActivityLogEntry[]> {
+  const data = await request<{ logs: ActivityLogEntry[] }>(`/agents/${id}/logs?limit=${limit}`)
+  return data.logs ?? []
+}
