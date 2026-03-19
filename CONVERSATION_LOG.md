@@ -189,7 +189,83 @@ The project was built collaboratively between a human (Michiel Post) and an AI a
 
 ---
 
-### Turn 11 — Documentation + Final Deploy
+### Turn 12 — Activity Log + SQLite Persistence
+
+**Human:** Show a log of everything sent/returned to Venice and Uniswap to debug the agent. Are agents persisted in a database?
+
+**Agent analysis:**
+- Agents were stored in in-memory Maps — lost on every restart
+- No visibility into what Venice AI receives/returns, or what Uniswap executes
+
+**Agent actions (via background agent):**
+
+1. **`backend/src/db.js`** — new file; `better-sqlite3` with WAL mode, creates `agents`, `settings`, `activity_logs` tables in `/app/data/agents.db`
+
+2. **`agentController.js`** — replaced `Map`-based `agentStore` with SQLite-backed drop-in with identical `get/set/has/delete/values` interface
+
+3. **`settingsController.js`** — replaced in-memory `settingsStore` Map with SQLite; `getSettingsForAddress` now queries DB
+
+4. **`agentEngine.js`** — added `logActivity(agentId, type, summary, details)` + `getActivityLogs()`. Logs written at: ETH price fetch, Venice AI request (with full prompt), Venice AI response (with decision), trade start, trade success (with tx hash), trade error
+
+5. **`GET /api/agents/:id/logs`** — new endpoint returning timestamped activity log entries
+
+6. **Activity Log panel** in agent detail page: color-coded by type (💰🧠💬⚡✅❌), expandable JSON details on click, 4s auto-poll when running, clickable tx hashes → Base Sepolia explorer
+
+7. **Dockerfile** — fixed to multi-stage build with `python3/make/g++` in builder stage for `better-sqlite3` native compilation; runtime stage keeps image clean
+
+---
+
+### Turn 13 — Fix Agent Start (undefined ID + Invalid Date)
+
+**Human:** When clicking Start: requests `/api/agents/undefined/start`. Also shows "Invalid Date" for Created field.
+
+**Root cause:**
+- Backend wraps single-agent responses in `{ agent: {...} }` envelope
+- `api.ts` returned the raw wrapper — callers received `{ agent: {...} }` instead of the agent itself
+- `agent.id` was `undefined` everywhere → `/agents/undefined/start`
+- `new Date(undefined)` → `Invalid Date`
+
+**Agent actions:**
+- Fixed `getAgent`, `createAgent`, `updateAgent`, `updateAgentSkills` in `api.ts` to unwrap `{ agent }` envelope
+- Added `createdAt` null guard in agent detail page: renders `'—'` instead of crashing
+
+---
+
+### Turn 14 — Conversation Log + Project Wrap-up
+
+**Human:** Update the conversation log, commit and push. Are there any tasks left?
+
+**Agent actions:**
+- Verified all 4 hackathon tracks already submitted (including Venice "Private Agents, Trusted Actions")
+- Updated this CONVERSATION_LOG.md with turns 12-14
+- Updated hackathon project conversation log via API
+- Final commit and push
+
+**All todos complete.**
+
+---
+
+## Final Project State
+
+| Component | Status |
+|-----------|--------|
+| MetaMask / SIWE auth | ✅ Real — EIP-4361 hand-rolled |
+| Venice AI decisions | ✅ Real — `llama-3.3-70b` API calls |
+| Uniswap V3 swaps | ✅ Real — SwapRouter02 + QuoterV2, Base Sepolia |
+| ETH price feed | ✅ Real — CoinGecko 60s cache |
+| Data persistence | ✅ SQLite via `better-sqlite3` |
+| Activity log | ✅ Per-agent console showing all AI/chain calls |
+| Settings page | ✅ Venice key + live wallet balance |
+| Shareable agent links | ✅ Public unauthenticated agent profiles |
+| Hydration errors | ✅ Fixed — all localStorage reads in useEffect |
+| Start agent UX | ✅ Immediate Venice query + actionable error toast |
+| 4 hackathon tracks | ✅ Submitted |
+| Conversation log | ✅ In repo as CONVERSATION_LOG.md |
+
+**Live:** https://frontend-beta-self-40.vercel.app  
+**API:** https://backend-production-65de.up.railway.app  
+**Repo:** https://github.com/michielpost/uniswap-trading-agents  
+**Executor wallet:** `0xa955929469693b389460BFEaB2c47E3e4362DD01` (Base Sepolia — needs funding to trade)
 
 **Human:** Deploy the wallet. Update the README and project details. Include conversation log. Push and deploy everything.
 
