@@ -35,7 +35,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [showCreateModal, setShowCreateModal] = useState(false)
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error'; action?: { label: string; onClick: () => void } } | null>(null)
   const [hasVeniceKey, setHasVeniceKey] = useState<boolean | null>(null)
 
   useEffect(() => {
@@ -89,10 +89,20 @@ export default function DashboardPage() {
     setActionLoading(id)
     try {
       await startAgent(id)
-      showToast('Agent started', 'success')
+      showToast('Agent started — querying Venice AI now…', 'success')
       loadData()
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Failed to start agent', 'error')
+      const msg = err instanceof Error ? err.message : 'Failed to start agent'
+      if (msg.toLowerCase().includes('venice')) {
+        setToast({
+          message: 'Venice API key required to start agents.',
+          type: 'error',
+          action: { label: 'Go to Settings →', onClick: () => router.push('/dashboard/settings') },
+        })
+        setTimeout(() => setToast(null), 6000)
+      } else {
+        showToast(msg, 'error')
+      }
     } finally {
       setActionLoading(null)
     }
@@ -225,7 +235,7 @@ export default function DashboardPage() {
         />
       )}
 
-      {toast && <Toast message={toast.message} type={toast.type} />}
+      {toast && <Toast message={toast.message} type={toast.type} action={toast.action} />}
     </div>
   )
 }

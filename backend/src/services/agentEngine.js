@@ -323,6 +323,12 @@ function startAgentEngine(agent, agentStore, broadcast, veniceApiKey) {
 
   agentTimers.set(agent.id, timer);
   console.log(`[AgentEngine] Started agent ${agent.id} (tick: ${tickMs}ms)`);
+
+  // Fire an immediate evaluation so the first Venice AI check happens now
+  // instead of waiting for the first interval tick
+  evaluateTriggers(agent, config, broadcast, veniceApiKey).catch((err) => {
+    console.warn(`[AgentEngine] Initial tick failed for agent ${agent.id}:`, err.message);
+  });
 }
 
 function stopAgentEngine(agentId, ownerAddress, broadcast) {
