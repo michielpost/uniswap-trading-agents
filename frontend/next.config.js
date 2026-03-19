@@ -18,6 +18,10 @@ const nextConfig = {
       'pino-pretty':                     false,
       'lokijs':                          false,
       encoding:                          false,
+      // siwe imports ethers for optional ABI encoding — stub it (we use viem instead)
+      ethers:                            false,
+      // viem/isows imports ws for server-side WebSockets — browser uses native WebSocket
+      ws:                                false,
     }
     return config
   },

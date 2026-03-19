@@ -3,9 +3,24 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAccount, useConnect, useSignMessage } from 'wagmi'
-import { SiweMessage } from 'siwe'
 import { getNonce, login } from '@/lib/api'
 import { saveAuth, isAuthenticated } from '@/lib/auth'
+
+function buildSiweMessage(domain: string, address: string, uri: string, chainId: number, nonce: string): string {
+  const issuedAt = new Date().toISOString()
+  return [
+    `${domain} wants you to sign in with your Ethereum account:`,
+    address,
+    '',
+    'Sign in with Ethereum to Uniswap Trading Agents',
+    '',
+    `URI: ${uri}`,
+    'Version: 1',
+    `Chain ID: ${chainId}`,
+    `Nonce: ${nonce}`,
+    `Issued At: ${issuedAt}`,
+  ].join('\n')
+}
 
 export default function Home() {
   const router = useRouter()
@@ -43,15 +58,13 @@ export default function Home() {
     setError(null)
     try {
       const { nonce } = await getNonce(addr)
-      const message = new SiweMessage({
-        domain: window.location.host,
-        address: addr,
-        statement: 'Sign in with Ethereum to Uniswap Trading Agents',
-        uri: window.location.origin,
-        version: '1',
-        chainId: chain,
+      const message = buildSiweMessage(
+        window.location.host,
+        addr,
+        window.location.origin,
+        chain,
         nonce,
-      }).prepareMessage()
+      )
       const signature = await signMessageAsync({ message })
       const { token, address: loggedAddress } = await login(message, signature)
       saveAuth(token, loggedAddress)
