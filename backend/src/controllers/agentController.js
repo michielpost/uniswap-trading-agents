@@ -407,6 +407,73 @@ async function getPublicAgent(req, res, next) {
   } catch (err) { next(err); }
 }
 
+// ─── POST /api/agents/generate-skills ────────────────────────────────────────
+// Calls Venice AI to convert a plain-English strategy description into skills.md
+async function generateSkills(req, res, next) {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+
+    const { description } = req.body;
+
+    const settings = getSettingsForAddress(req.user.address);
+    if (!settings.veniceApiKey) {
+      throw new AppError("Venice API key required — configure it in Settings before using AI generation", 403);
+    }
+
+    const systemPrompt = `You are an expert Uniswap V3 trading strategy designer for the Uniswap Trading Agents platform.
+Given a plain-English strategy description, output ONLY a skills.md file in this exact format — no explanations, no code fences, just the raw markdown:
+
+## Strategy
+[1-2 sentence description of what the agent does]
+
+## Triggers
+- price_above: [ETH price in USD to trigger a sell/take-profit, realistic ~2000-5000]
+- price_below: [ETH price in USD to trigger a buy/entry, realistic ~1500-4000]
+
+## Risk
+- maxTradeSizeEth: [max ETH per trade. Use 0.001 for safety on testnet]
+- slippageBps: [slippage in basis points. 50-200 is reasonable]
+- stopLossPct: [stop loss %, e.g. 10. Omit if not relevant]
+- maxDailyTrades: [max trades per day, 1-10]
+
+Rules:
+- Only include trigger keys relevant to the strategy (omit price_above if buying only, etc.)
+- price_above and price_below must be realistic ETH/USD values (not percentages)
+- Output ONLY the markdown — no preamble, no explanation, no code blocks`;
+
+    const userPrompt = `Strategy description: ${description}`;
+
+    const veniceRes = await fetch("https://api.venice.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${settings.veniceApiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "llama-3.3-70b",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user",   content: userPrompt },
+        ],
+        max_tokens: 400,
+        temperature: 0.5,
+      }),
+    });
+
+    if (!veniceRes.ok) {
+      const errText = await veniceRes.text().catch(() => "");
+      throw new AppError(`Venice AI request failed (${veniceRes.status}): ${errText}`, 502);
+    }
+
+    const data = await veniceRes.json();
+    const skills = data.choices?.[0]?.message?.content?.trim();
+    if (!skills) throw new AppError("Venice AI returned an empty response", 502);
+
+    res.json({ skills });
+  } catch (err) { next(err); }
+}
+
 module.exports = {
   agentStore,
   listAgents,
@@ -423,4 +490,5 @@ module.exports = {
   deleteAgent,
   getPublicAgent,
   getAgentLogs,
+  generateSkills,
 };

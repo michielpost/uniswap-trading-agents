@@ -20,12 +20,21 @@ const {
   deleteAgent,
   getPublicAgent,
   getAgentLogs,
+  generateSkills,
 } = require("../controllers/agentController");
 
 const router = express.Router();
 
 // GET /api/agents/:id/public — public, no auth (must be before authenticated /:id)
 router.get("/:id/public", param("id").notEmpty(), getPublicAgent);
+
+// POST /api/agents/generate-skills — Venice AI natural language → skills.md
+router.post(
+  "/generate-skills",
+  [body("description").trim().notEmpty().withMessage("Strategy description is required")
+                               .isLength({ max: 500 }).withMessage("Description max 500 chars")],
+  generateSkills
+);
 
 // GET  /api/agents
 router.get("/", listAgents);

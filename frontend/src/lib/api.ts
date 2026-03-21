@@ -132,3 +132,11 @@ export async function getAgentLogs(id: string, limit = 100): Promise<ActivityLog
   const data = await request<{ logs: ActivityLogEntry[] }>(`/agents/${id}/logs?limit=${limit}`)
   return data.logs ?? []
 }
+
+export async function generateSkills(description: string): Promise<string> {
+  const data = await request<{ skills: string }>('/agents/generate-skills', {
+    method: 'POST',
+    body: JSON.stringify({ description }),
+  })
+  return data.skills
+}
