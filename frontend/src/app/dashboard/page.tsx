@@ -182,12 +182,22 @@ export default function DashboardPage() {
 
         {/* Venice API key warning */}
         {!demo && hasVeniceKey === false && (
-          <div className="mb-6 p-4 bg-yellow-900/40 border border-yellow-600 rounded-xl flex items-center justify-between">
+          <div className="mb-6 p-4 bg-yellow-900/40 border border-yellow-600 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <p className="text-yellow-300 font-semibold">⚠️ Venice API key not configured</p>
-              <p className="text-yellow-400 text-sm mt-1">Agents cannot run without a Venice API key. Add yours in Settings.</p>
+              <p className="text-yellow-400 text-sm mt-1">
+                Agents use{' '}
+                <a href="https://venice.ai" target="_blank" rel="noopener noreferrer" className="underline hover:text-yellow-200">
+                  Venice AI
+                </a>
+                {' '}for trading decisions. Get a free API key at{' '}
+                <a href="https://venice.ai/settings/api" target="_blank" rel="noopener noreferrer" className="underline hover:text-yellow-200">
+                  venice.ai/settings/api
+                </a>
+                , then add it in Settings.
+              </p>
             </div>
-            <button onClick={() => router.push('/dashboard/settings')} className="bg-yellow-600 hover:bg-yellow-500 text-white font-semibold py-2 px-4 rounded-lg text-sm">
+            <button onClick={() => router.push('/dashboard/settings')} className="bg-yellow-600 hover:bg-yellow-500 text-white font-semibold py-2 px-4 rounded-lg text-sm shrink-0">
               Go to Settings
             </button>
           </div>

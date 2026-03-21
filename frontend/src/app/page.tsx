@@ -107,8 +107,34 @@ export default function Home() {
         <p className="text-xl text-gray-400 mb-3">
           AI-powered trading bots with skills-based strategies
         </p>
-        <p className="text-gray-500 mb-10 text-sm">
+        <p className="text-gray-500 mb-6 text-sm">
           Deploy autonomous agents that trade on Uniswap V3 using customizable markdown-based skill sets.
+        </p>
+
+        {/* Powered-by badges */}
+        <div className="flex flex-wrap items-center justify-center gap-3 mb-10">
+          <a
+            href="https://venice.ai"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 bg-purple-900/40 border border-purple-700 hover:border-purple-500 text-purple-300 text-xs font-medium px-4 py-1.5 rounded-full transition-colors"
+          >
+            🧠 Powered by Venice AI
+          </a>
+          <span className="flex items-center gap-2 bg-blue-900/30 border border-blue-800 text-blue-300 text-xs font-medium px-4 py-1.5 rounded-full">
+            🦄 Trades on Uniswap V3
+          </span>
+          <span className="flex items-center gap-2 bg-gray-800 border border-gray-700 text-gray-400 text-xs font-medium px-4 py-1.5 rounded-full">
+            ⛓ Base Sepolia testnet
+          </span>
+        </div>
+
+        <p className="text-gray-600 text-xs mb-4 -mt-6">
+          A{' '}
+          <a href="https://venice.ai" target="_blank" rel="noopener noreferrer" className="text-purple-500 hover:text-purple-400 underline">
+            Venice API key
+          </a>
+          {' '}is required to run agents. Venice is a private, uncensored AI provider.
         </p>
 
         {error && (
