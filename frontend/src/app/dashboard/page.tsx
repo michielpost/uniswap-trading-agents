@@ -12,6 +12,7 @@ import {
   getPortfolioMetrics,
   getSettings,
 } from '@/lib/api'
+import { isDemoMode, exitDemoMode, DEMO_AGENTS, DEMO_METRICS } from '@/lib/demoData'
 import type { Agent, PortfolioMetrics } from '@/types'
 import Navbar from '@/components/Navbar'
 import AgentCard from '@/components/AgentCard'
@@ -37,8 +38,17 @@ export default function DashboardPage() {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error'; action?: { label: string; onClick: () => void } } | null>(null)
   const [hasVeniceKey, setHasVeniceKey] = useState<boolean | null>(null)
+  const [demo, setDemo] = useState(false)
 
   useEffect(() => {
+    const isDemo = isDemoMode()
+    setDemo(isDemo)
+    if (isDemo) {
+      setAgents(DEMO_AGENTS)
+      setMetrics(DEMO_METRICS)
+      setLoading(false)
+      return
+    }
     if (!isAuthenticated()) {
       router.push('/')
       return
@@ -86,6 +96,7 @@ export default function DashboardPage() {
   }
 
   const handleStart = async (id: string) => {
+    if (demo) { showToast('Connect your wallet to start real agents', 'error'); return }
     setActionLoading(id)
     try {
       await startAgent(id)
@@ -109,6 +120,7 @@ export default function DashboardPage() {
   }
 
   const handleStop = async (id: string) => {
+    if (demo) { showToast('Connect your wallet to manage real agents', 'error'); return }
     setActionLoading(id)
     try {
       await stopAgent(id)
@@ -122,6 +134,7 @@ export default function DashboardPage() {
   }
 
   const handleDelete = async (id: string) => {
+    if (demo) { showToast('Connect your wallet to manage real agents', 'error'); return }
     if (!confirm('Are you sure you want to delete this agent? This cannot be undone.')) return
     setActionLoading(id)
     try {
@@ -149,8 +162,26 @@ export default function DashboardPage() {
       <Navbar />
 
       <main className="max-w-7xl mx-auto px-4 py-8">
+        {/* Demo mode banner */}
+        {demo && (
+          <div className="mb-6 p-4 bg-indigo-900/50 border border-indigo-500 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <p className="text-indigo-200 font-semibold">🎮 Demo Mode — sample data only</p>
+              <p className="text-indigo-300 text-sm mt-0.5">Connect your wallet to create and run real trading agents on Base Sepolia.</p>
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <button
+                onClick={() => { exitDemoMode(); router.push('/') }}
+                className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2 px-4 rounded-lg text-sm transition-colors"
+              >
+                Connect Wallet →
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Venice API key warning */}
-        {hasVeniceKey === false && (
+        {!demo && hasVeniceKey === false && (
           <div className="mb-6 p-4 bg-yellow-900/40 border border-yellow-600 rounded-xl flex items-center justify-between">
             <div>
               <p className="text-yellow-300 font-semibold">⚠️ Venice API key not configured</p>
@@ -181,7 +212,7 @@ export default function DashboardPage() {
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold text-white">My Agents</h1>
           <button
-            onClick={() => setShowCreateModal(true)}
+            onClick={() => demo ? showToast('Connect your wallet to create real agents', 'error') : setShowCreateModal(true)}
             className="bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2 px-5 rounded-xl transition-colors shadow-lg"
           >
             + Create Agent

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useAccount, useConnect, useSignMessage } from 'wagmi'
 import { getNonce, login } from '@/lib/api'
 import { saveAuth, isAuthenticated } from '@/lib/auth'
+import { enterDemoMode } from '@/lib/demoData'
 
 function buildSiweMessage(domain: string, address: string, uri: string, chainId: number, nonce: string): string {
   const issuedAt = new Date().toISOString()
@@ -140,6 +141,12 @@ export default function Home() {
                 ) : (
                   'Connect Wallet'
                 )}
+              </button>
+              <button
+                onClick={() => { enterDemoMode(); router.push('/dashboard') }}
+                className="bg-gray-700 hover:bg-gray-600 text-gray-200 font-semibold py-3 px-8 rounded-xl transition-colors border border-gray-600 hover:border-gray-500"
+              >
+                Try Demo →
               </button>
               {!isConnected && typeof window !== 'undefined' && !(window as typeof window & { ethereum?: unknown }).ethereum && (
                 <p className="mt-3 text-gray-500 text-xs text-center w-full">

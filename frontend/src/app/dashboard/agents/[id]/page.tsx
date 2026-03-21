@@ -6,6 +6,7 @@ import { isAuthenticated } from '@/lib/auth'
 import { getAgent, updateAgentSkills, startAgent, stopAgent, getAgentTrades, getAgentLogs } from '@/lib/api'
 import type { Agent, Trade } from '@/types'
 import type { ActivityLogEntry } from '@/lib/api'
+import { isDemoMode, exitDemoMode, DEMO_AGENTS, DEMO_TRADES, DEMO_ACTIVITY_LOGS } from '@/lib/demoData'
 import Navbar from '@/components/Navbar'
 import StatusBadge from '@/components/StatusBadge'
 import Toast from '@/components/Toast'
@@ -133,8 +134,21 @@ export default function AgentDetailPage() {
   const [savingSkills, setSavingSkills] = useState(false)
   const [togglingStatus, setTogglingStatus] = useState(false)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+  const [demo, setDemo] = useState(false)
 
   useEffect(() => {
+    const isDemo = isDemoMode()
+    setDemo(isDemo)
+    if (isDemo) {
+      const demoAgent = DEMO_AGENTS.find(a => a.id === id)
+      if (!demoAgent) { router.push('/dashboard'); return }
+      setAgent(demoAgent)
+      setSkills(demoAgent.skills || SKILLS_TEMPLATE)
+      setTrades(DEMO_TRADES[id] ?? [])
+      setLogs(DEMO_ACTIVITY_LOGS[id] ?? [])
+      setLoading(false)
+      return
+    }
     if (!isAuthenticated()) {
       router.push('/')
       return
@@ -145,12 +159,12 @@ export default function AgentDetailPage() {
 
   // Poll logs when agent is running
   useEffect(() => {
-    if (agent?.status !== 'running') return
+    if (demo || agent?.status !== 'running') return
     const interval = setInterval(() => {
       getAgentLogs(id).then(setLogs).catch(() => {})
     }, 4000)
     return () => clearInterval(interval)
-  }, [agent?.status, id])
+  }, [agent?.status, id, demo])
 
   const showToast = (message: string, type: 'success' | 'error') => {
     setToast({ message, type })
@@ -202,6 +216,7 @@ export default function AgentDetailPage() {
 
   const handleToggleStatus = async () => {
     if (!agent) return
+    if (demo) { showToast('Connect your wallet to control real agents', 'error'); return }
     setTogglingStatus(true)
     try {
       if (agent.status === 'running') {
@@ -262,6 +277,22 @@ export default function AgentDetailPage() {
         >
           ← Back to Dashboard
         </button>
+
+        {/* Demo banner */}
+        {demo && (
+          <div className="mb-6 p-4 bg-indigo-900/50 border border-indigo-500 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <p className="text-indigo-200 font-semibold">🎮 Demo Mode — sample data only</p>
+              <p className="text-indigo-300 text-sm mt-0.5">This is a simulated agent. Connect your wallet to run real trading agents.</p>
+            </div>
+            <button
+              onClick={() => { exitDemoMode(); router.push('/') }}
+              className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2 px-4 rounded-lg text-sm transition-colors shrink-0"
+            >
+              Connect Wallet →
+            </button>
+          </div>
+        )}
 
         {/* Agent Header Card */}
         <div className="bg-gray-800 rounded-2xl p-6 mb-6 border border-gray-700">
