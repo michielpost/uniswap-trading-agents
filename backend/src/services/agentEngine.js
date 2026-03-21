@@ -53,6 +53,63 @@ async function getCurrentEthPrice() {
   return data.ethereum.usd;
 }
 
+// ─── Market indicators ────────────────────────────────────────────────────────
+// Fetches hourly price history and computes RSI-14, 24h change %, 7-day MA.
+let _priceHistoryCache = null;
+let _priceHistoryCachedAt = 0;
+
+async function getMarketIndicators() {
+  const now = Date.now();
+  // Cache for 5 minutes to avoid rate-limiting CoinGecko
+  if (_priceHistoryCache && now - _priceHistoryCachedAt < 5 * 60 * 1000) {
+    return _priceHistoryCache;
+  }
+
+  const resp = await fetch(
+    "https://api.coingecko.com/api/v3/coins/ethereum/market_chart?vs_currency=usd&days=7&interval=hourly"
+  );
+  if (!resp.ok) throw new Error(`CoinGecko market chart failed: ${resp.status}`);
+  const data = await resp.json();
+  const prices = (data.prices || []).map(([, p]) => p); // [price, price, ...]
+
+  if (prices.length < 15) throw new Error("Insufficient price history");
+
+  const current = prices[prices.length - 1];
+
+  // 24h change %
+  const price24hAgo = prices[prices.length - 25] ?? prices[0];
+  const change24h = ((current - price24hAgo) / price24hAgo) * 100;
+
+  // 7-day moving average (168 hourly candles)
+  const ma7Window = prices.slice(-168);
+  const ma7 = ma7Window.reduce((s, p) => s + p, 0) / ma7Window.length;
+
+  // RSI-14 (using last 15 hourly closes)
+  const rsiPrices = prices.slice(-15);
+  let gains = 0, losses = 0;
+  for (let i = 1; i < rsiPrices.length; i++) {
+    const diff = rsiPrices[i] - rsiPrices[i - 1];
+    if (diff > 0) gains += diff; else losses += Math.abs(diff);
+  }
+  const periods = rsiPrices.length - 1;
+  const avgGain = gains / periods;
+  const avgLoss = losses / periods;
+  const rsi = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
+
+  const result = {
+    current,
+    change24h: parseFloat(change24h.toFixed(2)),
+    ma7: parseFloat(ma7.toFixed(2)),
+    rsi14: parseFloat(rsi.toFixed(1)),
+    rsiSignal: rsi < 30 ? 'oversold' : rsi > 70 ? 'overbought' : 'neutral',
+    aboveMA7: current > ma7,
+  };
+
+  _priceHistoryCache = result;
+  _priceHistoryCachedAt = now;
+  return result;
+}
+
 // ─── Stores ───────────────────────────────────────────────────────────────────
 const tradeHistory = new Map();   // agentId -> Trade[]
 const agentTimers  = new Map();   // agentId -> intervalId
@@ -238,28 +295,36 @@ async function evaluateTriggers(agent, config, broadcast, veniceApiKey) {
     return;
   }
 
-  // ── Get current ETH price ───────────────────────────────────────────────────
+  // ── Get current ETH price + market indicators ───────────────────────────────
   let price = null;
+  let indicators = null;
   try {
-    price = await getCurrentEthPrice();
-    logActivity(agent.id, 'price', `ETH price: $${price.toFixed(2)}`, { price });
+    indicators = await getMarketIndicators();
+    price = indicators.current;
+    logActivity(agent.id, 'price', `ETH $${price.toFixed(2)} | RSI-14: ${indicators.rsi14} (${indicators.rsiSignal}) | 24h: ${indicators.change24h > 0 ? '+' : ''}${indicators.change24h}% | MA7: $${indicators.ma7}`, { price, ...indicators });
   } catch (cgErr) {
-    // Fallback: try Uniswap quoter if RPC_URL is available
-    if (process.env.RPC_URL) {
-      try {
-        const quote = await getQuote(
-          config.strategy.tokenIn,
-          config.strategy.tokenOut,
-          "1000000000000000000",
-          config.strategy.fee
-        );
-        price = parseFloat(quote.amountOut) / 1e6;
-        logActivity(agent.id, 'price', `ETH price (RPC fallback): $${price.toFixed(2)}`, { price });
-      } catch (rpcErr) {
-        console.warn(`[AgentEngine] Price fetch failed for agent ${agent.id}:`, rpcErr.message);
+    // Fallback to simple price fetch
+    try {
+      price = await getCurrentEthPrice();
+      logActivity(agent.id, 'price', `ETH price: $${price.toFixed(2)} (indicators unavailable)`, { price });
+    } catch (fallbackErr) {
+      // Last resort: Uniswap quoter
+      if (process.env.RPC_URL) {
+        try {
+          const quote = await getQuote(
+            config.strategy.tokenIn,
+            config.strategy.tokenOut,
+            "1000000000000000000",
+            config.strategy.fee
+          );
+          price = parseFloat(quote.amountOut) / 1e6;
+          logActivity(agent.id, 'price', `ETH price (RPC fallback): $${price.toFixed(2)}`, { price });
+        } catch (rpcErr) {
+          console.warn(`[AgentEngine] Price fetch failed for agent ${agent.id}:`, rpcErr.message);
+        }
+      } else {
+        console.warn(`[AgentEngine] CoinGecko failed for agent ${agent.id}:`, cgErr.message);
       }
-    } else {
-      console.warn(`[AgentEngine] CoinGecko failed for agent ${agent.id}:`, cgErr.message);
     }
   }
 
@@ -271,18 +336,25 @@ async function evaluateTriggers(agent, config, broadcast, veniceApiKey) {
         ? recentTrades.map((t) => `${t.direction.toUpperCase()} ${t.status} at ${new Date(t.timestamp).toISOString()}`).join("; ")
         : "No recent trades";
 
+      const indicatorBlock = indicators ? [
+        `- Price:          $${price.toFixed(2)}`,
+        `- 24h change:     ${indicators.change24h > 0 ? '+' : ''}${indicators.change24h}%`,
+        `- RSI-14:         ${indicators.rsi14} (${indicators.rsiSignal}${indicators.rsi14 < 30 ? ' — potential BUY signal' : indicators.rsi14 > 70 ? ' — potential SELL signal' : ''})`,
+        `- 7-day MA:       $${indicators.ma7} (price is ${indicators.aboveMA7 ? 'ABOVE' : 'BELOW'} MA — ${indicators.aboveMA7 ? 'bullish' : 'bearish'} signal)`,
+      ].join('\n') : `- Price: $${price ?? 'unknown'}`;
+
       const messages = [
         {
           role: "system",
-          content: "You are a trading decision engine. Analyse the provided context and reply with exactly one word: BUY, SELL, or HOLD.",
+          content: "You are a professional crypto trading decision engine with access to technical indicators. Analyse the market data and agent strategy, then reply with exactly one word: BUY, SELL, or HOLD. Consider RSI oversold/overbought conditions, price vs moving average, and the agent's configured triggers.",
         },
         {
           role: "user",
-          content: `Current ETH price: $${price ?? "unknown"}\n\nAgent skills:\n${agent.skills || "(no skills configured)"}\n\nRecent trades (last 3): ${tradesSummary}\n\nBased on this, should the agent BUY, SELL, or HOLD right now? Reply with exactly one word.`,
+          content: `## Market Data (ETH/USD)\n${indicatorBlock}\n\n## Agent Strategy\n${agent.skills || "(no skills configured)"}\n\n## Recent Trade History\n${tradesSummary}\n\nBased on the technical indicators and this agent's strategy, reply with exactly one word: BUY, SELL, or HOLD.`,
         },
       ];
 
-      logActivity(agent.id, 'venice_req', `Venice AI request (ETH: $${price ?? 'unknown'})`, {
+      logActivity(agent.id, 'venice_req', `Venice AI request (ETH: $${price ?? 'unknown'}${indicators ? `, RSI: ${indicators.rsi14}, 24h: ${indicators.change24h}%` : ''})`, {
         model: 'llama-3.3-70b',
         prompt: messages[1].content,
       });
