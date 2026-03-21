@@ -12,6 +12,7 @@ const agentRoutes    = require("./routes/agents");
 const tradeRoutes    = require("./routes/trades");
 const marketRoutes   = require("./routes/market");
 const settingsRoutes = require("./routes/settings");
+const adminRoutes    = require("./routes/admin");
 const { getPublicAgent } = require("./controllers/agentController");
 
 // Middleware imports
@@ -82,6 +83,7 @@ app.use("/api/agents",  authenticate, agentRoutes);
 app.use("/api/trades",  authenticate, tradeRoutes);
 app.use("/api/market",  authenticate, marketRoutes);
 app.use("/api/settings", settingsRoutes);
+app.use("/api/admin",   adminRoutes);
 
 // ─── API docs stub ────────────────────────────────────────────────────────────
 app.get("/api", (req, res) => {
