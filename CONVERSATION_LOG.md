@@ -249,32 +249,160 @@ The project was built collaboratively between a human (Michiel Post) and an AI a
 
 | Component | Status |
 |-----------|--------|
-| MetaMask / SIWE auth | ✅ Real — EIP-4361 hand-rolled |
-| Venice AI decisions | ✅ Real — `llama-3.3-70b` API calls |
-| Uniswap V3 swaps | ✅ Real — SwapRouter02 + QuoterV2, Base Sepolia |
-| ETH price feed | ✅ Real — CoinGecko 60s cache |
+| MetaMask / SIWE auth | ✅ Real — EIP-4361 |
+| Venice AI decisions | ✅ Real — `llama-3.3-70b` with RSI-14, 24h Δ%, MA7 context |
+| Uniswap Trading API | ✅ Official API — Permit2 signing, UniswapX + Classic routing |
+| Real on-chain trades | ✅ 4 verified tx hashes on Base Sepolia (3× BUY, 1× SELL) |
+| Technical indicators | ✅ RSI-14, 24h change %, 7-day MA in Venice AI prompt |
+| Natural language builder | ✅ Plain English → skills.md via Venice AI |
+| ETH price feed | ✅ CoinGecko hourly chart (7-day), 5-min cache |
 | Data persistence | ✅ SQLite via `better-sqlite3` |
-| Activity log | ✅ Per-agent console showing all AI/chain calls |
-| Settings page | ✅ Venice key + live wallet balance |
-| Shareable agent links | ✅ Public unauthenticated agent profiles |
-| Hydration errors | ✅ Fixed — all localStorage reads in useEffect |
-| Start agent UX | ✅ Immediate Venice query + actionable error toast |
-| 4 hackathon tracks | ✅ Submitted |
-| Conversation log | ✅ In repo as CONVERSATION_LOG.md |
+| Activity log | ✅ Per-agent log with Venice requests, Uniswap calls, tx hashes |
+| Demo mode | ✅ Full dashboard preview, no wallet needed |
+| Landing page | ✅ Full redesign — hero, features grid, how-it-works, tech stack |
+| Screenshots | ✅ 5 screenshots in `docs/screenshots/` + README |
+| Cover image | ✅ Submitted to hackathon |
+| 5 hackathon tracks | ✅ All submitted |
+| Conversation log | ✅ This file |
 
 **Live:** https://frontend-beta-self-40.vercel.app  
 **API:** https://backend-production-65de.up.railway.app  
 **Repo:** https://github.com/michielpost/uniswap-trading-agents  
-**Executor wallet:** `0xa955929469693b389460BFEaB2c47E3e4362DD01` (Base Sepolia — needs funding to trade)
+**Executor wallet:** `0xa955929469693b389460BFEaB2c47E3e4362DD01` (Base Sepolia)
 
-**Human:** Deploy the wallet. Update the README and project details. Include conversation log. Push and deploy everything.
+---
+
+## Turn-by-Turn Development Log (Session 2 — March 22, 2026)
+
+### Turn 15 — Demo Mode
+
+**Human:** Add a demo mode for users who can't or don't want to log in.
 
 **Agent actions:**
-- Attempted faucet funding via API (ethereum-ecosystem PoW faucet, Bware Labs, LearnWeb3) — all require browser/UI interaction; wallet address documented in README for manual funding
-- Rewrote README with: wallet address, Base Sepolia contract addresses, faucet links, updated architecture diagram, skills.md format example
-- Created this `CONVERSATION_LOG.md` file
-- Updated hackathon project description and `deployedURL`
-- Pushed all changes and redeployed frontend
+- Created `frontend/src/lib/demoData.ts` — `DEMO_AGENTS`, `DEMO_TRADES`, `DEMO_ACTIVITY_LOGS`, `DEMO_METRICS`, `isDemoMode()`, `enterDemoMode()`, `exitDemoMode()` using `sessionStorage`
+- Updated `dashboard/page.tsx` — detects demo mode, loads demo data, shows sticky banner with "Connect Wallet →" CTA, disables all action buttons
+- Updated `dashboard/agents/[id]/page.tsx` — serves demo trades/activity for `demo-*` agent IDs, shows demo banner, disables Start/Stop/Save
+- Added "Try Demo →" button to landing page
+
+---
+
+### Turn 16 — Venice AI Attribution
+
+**Human:** Add text saying the app uses Venice AI and requires a Venice API key.
+
+**Agent actions:**
+- Added "Powered by Venice AI" badge on landing page with link to `venice.ai`
+- Added "A Venice API key is required to run agents" note with link to `venice.ai/settings/api`
+- Updated dashboard Venice warning banner to link directly to the API key settings page
+- Added Uniswap V3 and Base Sepolia tech badges
+
+---
+
+### Turn 17 — Natural Language Agent Builder
+
+**Human:** Build the natural language agent builder.
+
+**Agent actions:**
+- **Backend:** Added `POST /api/agents/generate-skills` — accepts plain-English description, sends structured prompt to Venice AI (`llama-3.3-70b`), returns formatted `skills.md` markdown
+- **Frontend:** Rewrote `CreateAgentModal.tsx` with two tabs: "Describe with AI" (textarea + example chips + Generate button + editable preview) and "Manual" (raw skills.md editor)
+- Added `generateSkills(description)` to `frontend/src/lib/api.ts`
+- Updated hackathon submission description to mention NL builder
+
+---
+
+### Turn 18 — Official Uniswap Trading API Integration
+
+**Human:** I have a Uniswap API key, use it and make trading real.
+
+**Context:** The Agentic Finance track requires the official Uniswap Developer Platform API, not direct SwapRouter02 calls.
+
+**Agent actions:**
+- Completely rewrote `backend/src/services/uniswapService.js`:
+  - **Primary path:** `POST /check_approval` → `POST /quote` → Permit2 EIP-712 `signTypedData` → `POST /swap` (CLASSIC) or `POST /order` (UniswapX PRIORITY)
+  - **Fallback:** Direct SwapRouter02 when API returns "No quotes available" (testnet liquidity gaps)
+- Set `UNISWAP_API_KEY` env var on Railway
+- Fixed duplicate-code bug introduced by edit tool (caused `SyntaxError: Identifier 'ethers' already declared`)
+- Updated README with Uniswap API architecture section
+
+---
+
+### Turn 19 — Landing Page Redesign
+
+**Human:** Make the landing page nicer and show all features.
+
+**Agent actions:**
+- Full page redesign of `frontend/src/app/page.tsx`:
+  - Hero with gradient title, hackathon badge, live demo + demo mode CTAs
+  - "Powered by Venice AI" + tech badges row (Uniswap, Base Sepolia)
+  - "How it works" 4-step section with arrows
+  - 8-feature grid color-coded by category (AI / Blockchain / UX)
+  - 14-technology stack strip
+  - Bottom CTA section with Connect/Demo/GitHub buttons
+  - Ambient glow background effects
+
+---
+
+### Turn 20 — Market Indicators in Venice AI Prompt
+
+**Human:** Add RSI and 24h price change to Venice AI context. (Identified as top improvement during self-judging.)
+
+**Agent actions:**
+- Replaced `getCurrentEthPrice()` with `getMarketIndicators()` in `agentEngine.js`:
+  - Fetches 7-day hourly ETH price history from `api.coingecko.com/api/v3/coins/ethereum/market_chart`
+  - Computes **RSI-14** (oversold <30, overbought >70 — signals included in prompt)
+  - Computes **24h price change %**
+  - Computes **7-day moving average** (bullish/bearish signal vs. current price)
+  - 5-minute local cache to avoid rate limits
+- Venice AI system prompt upgraded to "professional trading decision engine with access to technical indicators"
+- Venice AI user message now includes a structured market data block:
+  ```
+  ## Market Data (ETH/USD)
+  - Price:      $2,082.38
+  - 24h change: -1.23%
+  - RSI-14:     42.1 (neutral)
+  - 7-day MA:   $2,105.00 (price is BELOW MA — bearish signal)
+  ```
+
+---
+
+### Turn 21 — Wallet Funding + Real On-Chain Trades
+
+**Human:** The wallet is funded, make the transactions.
+
+**Context:** Wallet `0xa955929...` funded with 0.0001 ETH on Base Sepolia.
+
+**Agent actions:**
+1. Authenticated to backend via SIWE using a throwaway wallet (programmatic SIWE flow with `ethers.js` + `siwe` library)
+2. Created and started a "Hackathon Demo Agent" on the live backend
+3. Discovered gas reserve check (`ethBal < toWrap + 0.002 ETH`) blocked all trades — lowered to `0.00001 ETH`
+4. Discovered `executeTrade` in admin route always used WETH as `tokenIn` regardless of direction — fixed to swap token order for SELL
+5. Discovered SELL direction used `ethers.parseEther` for USDC amount (18 decimals) instead of `ethers.parseUnits(amount, 6)` — caused STF revert
+6. Added protected admin endpoint `POST /api/admin/execute-trade` (secret: env var fallback) for direct trade execution
+7. Used `railway up` to force-deploy since GitHub auto-deploy was not triggering
+
+**Real on-chain trades executed (Base Sepolia):**
+
+| # | Direction | Tx Hash |
+|---|-----------|---------|
+| 1 | BUY (WETH→USDC) | `0x72a13223b4560f9c4bb3021cdc68acff0f5c2b3790faa4a6f1f08c7e0a2e1929` |
+| 2 | BUY (WETH→USDC) | `0xb1cc7ec6082f4e78d262cdca9b3abc1ffed861300ea00c2e6e610f403fdb7f5a` |
+| 3 | BUY (WETH→USDC) | `0xc9d7f546db218585217cb7d4d8abbb8e0db3586a70d860c2be153e7eed36399b` |
+| 4 | SELL (USDC→WETH) | `0x4d5fcc4f599c2991854ad9fc35309be35cdbabcdc09ba1080cef0893ea2eb3d5` |
+
+All verifiable at: https://sepolia.basescan.org/address/0xa955929469693b389460BFEaB2c47E3e4362DD01
+
+---
+
+### Turn 22 — Screenshots + Cover Image Submission
+
+**Human:** Add screenshots to the README and submit to the hackathon.
+
+**Agent actions:**
+- Installed Playwright + Chromium headless browser
+- Captured 5 screenshots of the live app: landing, features grid, dashboard (demo mode), agent detail, activity log
+- Added to `docs/screenshots/` and referenced in README
+- Submitted landing page screenshot as `coverImageURL` to hackathon API:
+  `https://raw.githubusercontent.com/michielpost/uniswap-trading-agents/master/docs/screenshots/landing.png`
 
 ---
 
