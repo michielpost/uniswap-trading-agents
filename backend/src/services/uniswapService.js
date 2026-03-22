@@ -165,8 +165,13 @@ async function executeTradeDirectly(trade, riskConfig = {}) {
   const slippageBps = riskConfig.slippageBps || 100;
   const signer      = getSigner();
   const provider    = getProvider();
-  const amountIn    = ethers.parseEther(trade.amountIn.toString());
   const isWethIn    = trade.tokenIn.toLowerCase() === cfg.wethAddress.toLowerCase();
+  const isUsdcIn    = trade.tokenIn.toLowerCase() === cfg.usdcAddress.toLowerCase();
+
+  // Parse amountIn with correct decimals (USDC=6, everything else treat as 18/ETH)
+  const amountIn = isUsdcIn
+    ? ethers.parseUnits(trade.amountIn.toString(), 6)
+    : ethers.parseEther(trade.amountIn.toString());
 
   // Auto-wrap ETH → WETH when needed
   if (isWethIn) {
