@@ -17,6 +17,25 @@ AI-powered autonomous trading agents that make **real on-chain Uniswap swaps** o
 
 ---
 
+## Screenshots
+
+### Landing Page
+![Landing Page](docs/screenshots/landing.png)
+
+### Dashboard (Demo Mode)
+![Dashboard](docs/screenshots/dashboard.png)
+
+### Feature Overview
+![Features](docs/screenshots/features.png)
+
+### Agent Detail + Skills.md Editor
+![Agent Detail](docs/screenshots/agent-detail.png)
+
+### Activity Log + Trade History with Tx Hashes
+![Activity Log](docs/screenshots/activity-log.png)
+
+---
+
 ## Features
 
 - 🤖 **Autonomous AI Agents** — Create trading bots with natural-language `skills.md` strategies
