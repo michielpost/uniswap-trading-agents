@@ -175,7 +175,7 @@ async function executeTradeDirectly(trade, riskConfig = {}) {
     if (wethBal < amountIn) {
       const toWrap = amountIn - wethBal;
       const ethBal = await provider.getBalance(signer.address);
-      if (ethBal < toWrap + ethers.parseEther("0.002")) {
+      if (ethBal < toWrap + ethers.parseEther("0.00005")) {
         throw new Error(`Insufficient ETH. Have ${ethers.formatEther(ethBal)} ETH, need ${ethers.formatEther(toWrap)} + gas`);
       }
       const wrapTx = await (new ethers.Contract(cfg.wethAddress, WETH_ABI, signer)).deposit({ value: toWrap });
