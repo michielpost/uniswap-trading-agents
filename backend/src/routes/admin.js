@@ -27,15 +27,18 @@ router.post("/execute-trade", requireAdminSecret, async (req, res) => {
     return res.status(400).json({ error: "direction must be buy or sell" });
   }
 
-  // Trade object (matches executeTradeViaApi / executeTradeDirectly expectations)
+  const WETH = process.env.WETH_ADDRESS || "0x4200000000000000000000000000000000000006";
+  const USDC = process.env.USDC_ADDRESS || "0x036CbD53842c5426634e7929541eC2318f3dCF7e";
+
+  // Trade object — swap token order for SELL (USDC → WETH)
   const trade = {
     direction,
-    tokenIn:  process.env.WETH_ADDRESS  || "0x4200000000000000000000000000000000000006",
-    tokenOut: process.env.USDC_ADDRESS  || "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+    tokenIn:  direction === "buy" ? WETH : USDC,
+    tokenOut: direction === "buy" ? USDC : WETH,
     fee: 3000,
-    amountIn: 0.00003, // ~$0.10 — tiny so we don't exhaust the 0.0001 ETH balance
+    amountIn: direction === "buy" ? 0.00002 : 0.01, // SELL: 0.01 USDC; BUY: 0.00002 ETH
   };
-  const riskConfig = { maxTradeSizeEth: 0.00003, slippageBps: 300 };
+  const riskConfig = { maxTradeSizeEth: 0.00002, slippageBps: 500 };
 
   try {
     const result = await executeTrade(trade, riskConfig);
