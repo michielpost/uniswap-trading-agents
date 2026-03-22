@@ -176,6 +176,15 @@ Network:  Base Sepolia (chain ID 84532)
 Explorer: https://sepolia.basescan.org/address/0xa955929469693b389460BFEaB2c47E3e4362DD01
 ```
 
+**Verified on-chain trades (Base Sepolia):**
+
+| # | Direction | Tx Hash | Explorer |
+|---|-----------|---------|---------|
+| 1 | BUY (WETH→USDC) | `0x72a13223b4560f9c4bb3021cdc68acff0f5c2b3790faa4a6f1f08c7e0a2e1929` | [view](https://sepolia.basescan.org/tx/0x72a13223b4560f9c4bb3021cdc68acff0f5c2b3790faa4a6f1f08c7e0a2e1929) |
+| 2 | BUY (WETH→USDC) | `0xb1cc7ec6082f4e78d262cdca9b3abc1ffed861300ea00c2e6e610f403fdb7f5a` | [view](https://sepolia.basescan.org/tx/0xb1cc7ec6082f4e78d262cdca9b3abc1ffed861300ea00c2e6e610f403fdb7f5a) |
+| 3 | BUY (WETH→USDC) | `0xc9d7f546db218585217cb7d4d8abbb8e0db3586a70d860c2be153e7eed36399b` | [view](https://sepolia.basescan.org/tx/0xc9d7f546db218585217cb7d4d8abbb8e0db3586a70d860c2be153e7eed36399b) |
+| 4 | SELL (USDC→WETH) | `0x4d5fcc4f599c2991854ad9fc35309be35cdbabcdc09ba1080cef0893ea2eb3d5` | [view](https://sepolia.basescan.org/tx/0x4d5fcc4f599c2991854ad9fc35309be35cdbabcdc09ba1080cef0893ea2eb3d5) |
+
 **Token addresses (Base Sepolia):**
 
 | Token | Address |
